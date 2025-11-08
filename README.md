@@ -47,9 +47,9 @@
 ### 1. 引入依赖（Maven）
 ```xml
 <dependency>
-    <groupId>com.github.toon-java</groupId>
-    <artifactId>toon-core</artifactId>
-    <version>1.0.0</version>
+    <groupId>com.github</groupId>
+    <artifactId>toon-java</artifactId>
+    <version>1.0-SNAPSHOT</version>
 </dependency>
 ```
 ### 2. 定义实体类（带注释）
