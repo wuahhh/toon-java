@@ -1,5 +1,6 @@
 package com.github.toon;
 
+import com.github.toon.core.DefaultToonSerializer;
 import com.github.toon.exception.ToonException;
 
 import java.time.LocalDateTime;

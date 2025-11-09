@@ -1,4 +1,4 @@
-package com.github.toon;
+package com.github.toon.core;
 
 public class ToonFactory {
     private static ToonSerializer defaultSerializer = new DefaultToonSerializer();

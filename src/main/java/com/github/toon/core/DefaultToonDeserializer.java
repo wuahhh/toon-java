@@ -1,4 +1,4 @@
-package com.github.toon;
+package com.github.toon.core;
 
 import com.github.toon.converter.ConverterRegistry;
 import com.github.toon.converter.TypeConverter;
