@@ -1,6 +1,6 @@
 # TOON-Java: 面向LLM的高效数据序列化库（JDK 1.8+）
 
-![TOON Logo](https://via.placeholder.com/800x200?text=TOON-Java+-+LLM-Friendly+Serialization)
+![TOON Logo](doc/imges/toon-java-icon.png)
 
 > **TOON (Text-Oriented Object Notation)** 是专为大型语言模型（LLM）交互设计的轻量级数据序列化格式，兼顾人类可读性与Token优化，比JSON节省30-60%的API调用成本。本库是TOON规范在Java 8环境下的生产级实现。
 
@@ -124,9 +124,9 @@ enum UserStatus {
 }
 ```
 ### 3. 序列化与反序列化示例
+
 ```java
-import com.github.toon.core.DefaultToonSerializer;
-import com.github.toon.core.DefaultToonDeserializer;
+import com.github.toon.Toons;
 import com.github.toon.exception.ToonException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -141,14 +141,12 @@ public class QuickStartDemo {
         users.add(new User(2, "Bob", LocalDateTime.of(2024, 2, 15, 14, 20), addr));
 
         // 2. 序列化（带字段注释）
-        DefaultToonSerializer serializer = new DefaultToonSerializer();
-        String toonStr = serializer.serialize("users", users);
+        String toonStr = Toons.serialize("users", users);
         System.out.println("TOON序列化结果：");
         System.out.println(toonStr);
 
         // 3. 反序列化（自动忽略注释，只解析字段名）
-        DefaultToonDeserializer deserializer = new DefaultToonDeserializer();
-        List<User> deserializedUsers = deserializer.deserialize(toonStr, List.class);
+        List<User> deserializedUsers = Toons.deserialize(toonStr, List.class);
         System.out.println("\n反序列化结果：");
         for (User user : deserializedUsers) {
             System.out.println(user);
@@ -240,52 +238,9 @@ public class MixedFormatDemo {
         List<User> jsonData = objectMapper.readValue(jsonStr, new TypeReference<List<User>>() {});
 
         // 4. 转换为TOON（与LLM交互）
-        DefaultToonSerializer serializer = new DefaultToonSerializer();
-        String toonStr = serializer.serialize("users", jsonData);
+        String toonStr = Toons.serialize("users", jsonData);
         System.out.println("TOON格式（入模用）：");
         System.out.println(toonStr);
-    }
-}
-```
-
-### 3. 性能优化（高频场景）
-```java
-import com.github.toon.core.DefaultToonDeserializer;
-import com.github.toon.core.DefaultToonSerializer;
-import com.github.toon.exception.ToonException;
-
-// 单例工具类：全局复用序列化器/反序列化器
-public class ToonUtil {
-    // 全局单例，避免重复初始化
-    private static final DefaultToonSerializer SERIALIZER = new DefaultToonSerializer();
-    private static final DefaultToonDeserializer DESERIALIZER = new DefaultToonDeserializer();
-
-    // 静态代码块：注册全局转换器
-    static {
-        SERIALIZER.addConverter(new BigDecimalConverter());
-        DESERIALIZER.addConverter(new BigDecimalConverter());
-    }
-
-    // 序列化工具方法
-    public static String serialize(String rootName, Object data) throws ToonException {
-        return SERIALIZER.serialize(rootName, data);
-    }
-
-    // 反序列化工具方法
-    public static <T> T deserialize(String toonStr, Class<T> type) throws ToonException {
-        return DESERIALIZER.deserialize(toonStr, type);
-    }
-}
-
-// 使用示例
-public class PerformanceDemo {
-    public static void main(String[] args) throws ToonException {
-        // 高频场景直接调用工具类，无需重复创建实例
-        Address addr = new Address("123 Main St", "New York");
-        List<User> users = List.of(new User(1, "Alice", LocalDateTime.now(), addr));
-        
-        String toonStr = ToonUtil.serialize("users", users);
-        List<User> result = ToonUtil.deserialize(toonStr, List.class);
     }
 }
 ```

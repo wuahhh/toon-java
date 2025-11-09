@@ -17,12 +17,8 @@ public static void main(String[] args) throws ToonException {
     users.add(user1);
     users.add(user2);
 
-    // 初始化序列化器
-    DefaultToonSerializer serializer = new DefaultToonSerializer();
-    // 如需添加自定义转换器：serializer.addConverter(new CustomConverter());
-
     // 执行序列化
-    String toonStr = serializer.serialize("users", users);
+    String toonStr = Toons.serialize("users", users);
     System.out.println("TOON序列化结果：");
     System.out.println(toonStr);
 }
