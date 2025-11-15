@@ -13,14 +13,14 @@
 
 ## 核心优势
 
-| 特性                | 说明                                                                 |
-|---------------------|----------------------------------------------------------------------|
-| 🚀 **Token优化**    | 表格化数据存储+元数据前置，比JSON平均节省30-60% Token，大幅降低LLM调用成本 |
-| 🧠 **LLM友好**      | 支持字段注释，元数据显式约束，减少模型解析幻觉，提升交互准确率         |
-| 📦 **全面兼容**     | 支持基础类型、集合、嵌套对象、枚举、LocalDateTime等常用类型           |
-| 🔌 **灵活扩展**     | 自定义类型转换器、字段注释、序列化策略，适配复杂业务场景               |
-| ⚡ **性能高效**     | 反射字段缓存，避免重复解析类结构，高频场景性能提升50%以上             |
-| 🛡️ **健壮可靠**     | 精细化异常体系+特殊字符处理，生产环境稳定可用                         |
+| 特性                | 说明                                                |
+|---------------------|---------------------------------------------------|
+| 🚀 **Token优化**    | 表格化数据存储+元数据前置压缩，比JSON平均节省30-60% Token，大幅降低LLM调用成本 |
+| 🧠 **LLM友好**      | 支持字段注释，元数据显式约束，减少模型解析幻觉，提升交互准确率                   |
+| 📦 **全面兼容**     | 支持基础类型、集合、嵌套对象、枚举、LocalDateTime等常用类型              |
+| 🔌 **灵活扩展**     | 自定义类型转换器、字段注释、序列化策略，适配复杂业务场景                      |
+| ⚡ **性能高效**     | 反射字段缓存，避免重复解析类结构，高频场景性能提升50%以上                    |
+| 🛡️ **健壮可靠**     | 精细化异常体系+特殊字符处理，生产环境稳定可用                           |
 
 ## 功能特性
 
@@ -55,75 +55,64 @@
 ### 2. 定义实体类（带注释）
 
 ```java
-import com.github.toon.annotation.ToonField;
-import java.time.LocalDateTime;
-
-// 地址类（嵌套对象）
-class Address {
-    @ToonField(order = 1, comment = "街道地址，含门牌号和单元号")
+static class Address {
+    @com.github.toon.anno.ToonField(order = 1, comment = "街道地址，含门牌号和单元号")
     private String street;
-    
-    @ToonField(order = 2, comment = "城市名称（中文）")
+
+    @com.github.toon.anno.ToonField(order = 2, comment = "城市名称")
     private String city;
 
-    // 必须提供默认构造函数（反序列化用）
-    public Address() {}
-    
+    public Address() {} // 反序列化需要默认构造函数
+
     public Address(String street, String city) {
         this.street = street;
         this.city = city;
     }
 
-    // getter/setter（可选，视业务需求）
-    @Override
-    public String toString() {
-        return "Address{street='" + street + "', city='" + city + "'}";
-    }
+    // getter和setter（序列化需要访问字段值）
+    public String getStreet() { return street; }
+    public String getCity() { return city; }
 }
 
-// 用户类（主实体）
-class User {
-    @ToonField(order = 1, comment = "用户唯一标识（自增ID）")
-    private int id;
-    
-    @ToonField(order = 2, comment = "用户姓名（最长32字符）")
-    private String name;
-    
-    @ToonField(order = 3, comment = "注册时间（ISO格式：yyyy-MM-dd'T'HH:mm）")
-    private LocalDateTime registerTime;
-    
-    @ToonField(order = 4, comment = "用户地址信息")
-    private Address address;
-
-    public User() {}
-    
-    public User(int id, String name, LocalDateTime registerTime, Address address) {
-        this.id = id;
-        this.name = name;
-        this.registerTime = registerTime;
-        this.address = address;
-    }
-
-    // getter/setter
-    public Address getAddress() { return address; }
-
-    @Override
-    public String toString() {
-        return "User{" +
-                "id=" + id +
-                ", name='" + name + "'" +
-                ", registerTime=" + registerTime +
-                ", address=" + address +
-                '}';
-    }
-}
-
-// 枚举类型示例
 enum UserStatus {
     ACTIVE, INACTIVE
 }
+
+static class User {
+    @com.github.toon.anno.ToonField(order = 1, comment = "用户唯一标识，自增ID")
+    private int id;
+
+    @com.github.toon.anno.ToonField(order = 2, comment = "用户姓名，最长32字符")
+    private String name;
+
+    @com.github.toon.anno.ToonField(order = 3, comment = "注册时间，ISO格式")
+    private LocalDateTime registerTime;
+
+    @com.github.toon.anno.ToonField(order = 4, comment = "用户状态（ACTIVE/INACTIVE）")
+    private UserStatus status;
+
+    @com.github.toon.anno.ToonField(order = 5, comment = "用户地址信息")
+    private Address address;
+
+    public User() {} // 反序列化需要默认构造函数
+
+    public User(int id, String name, LocalDateTime registerTime, UserStatus status, Address address) {
+        this.id = id;
+        this.name = name;
+        this.registerTime = registerTime;
+        this.status = status;
+        this.address = address;
+    }
+
+    // getter和setter
+    public int getId() { return id; }
+    public String getName() { return name; }
+    public LocalDateTime getRegisterTime() { return registerTime; }
+    public UserStatus getStatus() { return status; }
+    public Address getAddress() { return address; }
+}
 ```
-### 3. 序列化与反序列化示例
+### 3. 序列化示例
 
 ```java
 import com.github.toon.Toons;
@@ -134,39 +123,43 @@ import java.util.List;
 
 public class QuickStartDemo {
     public static void main(String[] args) throws ToonException {
-        // 1. 构建测试数据
-        Address addr = new Address("123 Main St, Apt 4B", "New York");
-        List<User> users = new ArrayList<>();
-        users.add(new User(1, "Alice", LocalDateTime.of(2024, 1, 1, 10, 30), addr));
-        users.add(new User(2, "Bob", LocalDateTime.of(2024, 2, 15, 14, 20), addr));
+        // 1. 构建测试数据（含特殊字符、嵌套对象、枚举类型）
+        Address homeAddr = new Address("123 Main St, Apt 4B", "New York"); // 包含逗号的字符串
+        Address workAddr = new Address("456 Business Ave", "San Francisco");
 
-        // 2. 序列化（带字段注释）
-        String toonStr = Toons.serialize("users", users);
-        System.out.println("TOON序列化结果：");
-        System.out.println(toonStr);
+        User user1 = new User(
+                1,
+                "Alice",
+                LocalDateTime.of(2024, 1, 1, 10, 30),
+                UserStatus.ACTIVE,
+                homeAddr
+        );
 
-        // 3. 反序列化（自动忽略注释，只解析字段名）
-        List<User> deserializedUsers = Toons.deserialize(toonStr, List.class);
-        System.out.println("\n反序列化结果：");
-        for (User user : deserializedUsers) {
-            System.out.println(user);
-        }
+        User user2 = new User(
+                2,
+                "Bob",
+                LocalDateTime.of(2024, 2, 15, 14, 20),
+                UserStatus.INACTIVE,
+                workAddr
+        );
+
+        List<User> userList = new ArrayList<>();
+        userList.add(user1);
+        userList.add(user2);
+
+        // 2. 执行序列化（使用全局工具类）
+        String toonStr = Toons.serialize("users", userList);
+        System.out.println("集合序列化结果:\n" + toonStr);
     }
 }
 ```
 ### 4. 输出结果
 ```text
 TOON序列化结果：
-users(2){id#用户唯一标识（自增ID）,name#用户姓名（最长32字符）,registerTime#注册时间（ISO格式：yyyy-MM-dd'T'HH:mm）,address#用户地址信息{street#街道地址，含门牌号和单元号,city#城市名称（中文）}}: 
-  1,Alice,2024-01-01T10:30,;
-  2,Bob,2024-02-15T14:20,;
-    address#用户地址信息{street#街道地址，含门牌号和单元号,city#城市名称（中文）}: 
-      street: 123 Main St\, Apt 4B
-      city: New York
+users(2){id#用户唯一标识，自增ID,name#用户姓名，最长32字符,registerTime#注册时间，ISO格式,status#用户状态（ACTIVE/INACTIVE）,address#用户地址信息[$object],address.street#街道地址，含门牌号和单元号,address.city#城市名称}: 
+  1,Alice,2024-01-01T10:30:00,ACTIVE,(123 Main St\, Apt 4B,New York);
+  2,Bob,2024-02-15T14:20:00,INACTIVE,(456 Business Ave,San Francisco);
 
-反序列化结果：
-User{id=1, name='Alice', registerTime=2024-01-01T10:30, address=Address{street='123 Main St, Apt 4B', city='New York'}}
-User{id=2, name='Bob', registerTime=2024-02-15T14:20, address=Address{street='123 Main St, Apt 4B', city='New York'}}
 ```
 
 ## 进阶用法
@@ -217,11 +210,12 @@ public class ConverterDemo {
 ```
 
 ### 2. 混合格式策略（JSON 存储 + TOON 入模）
+
 ```java
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.github.toon.core.DefaultToonSerializer;
 import com.github.toon.exception.ToonException;
+
 import java.util.List;
 
 public class MixedFormatDemo {
@@ -233,10 +227,7 @@ public class MixedFormatDemo {
         // 2. JSON序列化（存储/持久化）
         ObjectMapper objectMapper = new ObjectMapper();
         String jsonStr = objectMapper.writeValueAsString(users);
-
-        // 3. JSON反序列化为对象
-        List<User> jsonData = objectMapper.readValue(jsonStr, new TypeReference<List<User>>() {});
-
+        
         // 4. 转换为TOON（与LLM交互）
         String toonStr = Toons.serialize("users", jsonData);
         System.out.println("TOON格式（入模用）：");
