@@ -285,9 +285,7 @@ public class DefaultToonSerializer implements ToonSerializer {
     private boolean isPrimitiveOrSupported(Class<?> type) {
         return type.isPrimitive()
                 || type == String.class
-                || type == Integer.class
-                || type == Long.class
-                || type == Double.class
+                ||  Number.class.isAssignableFrom(type)
                 || type == Boolean.class
                 || converterRegistry.findConverter(type) != null;
     }
