@@ -8,8 +8,14 @@ import com.github.toon.exception.ToonReflectionException;
 
 import java.lang.reflect.Field;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 public class DefaultToonSerializer implements ToonSerializer {
@@ -32,8 +38,10 @@ public class DefaultToonSerializer implements ToonSerializer {
         }
 
         StringBuilder builder = new StringBuilder();
-        // 处理集合类型（List/Set）
-        if (data instanceof Collection<?>) {
+        if (data instanceof Map<?, ?>) {
+            serializeMap(rootName, (Map<String, ?>) data, builder, 0);
+            // 处理集合类型（List/Set）
+        } else if (data instanceof Collection<?>) {
             serializeCollection(rootName, (Collection<?>) data, builder, 0);
         } else {
             // 处理单个对象（含嵌套）
@@ -42,16 +50,100 @@ public class DefaultToonSerializer implements ToonSerializer {
         return builder.toString().trim(); // 去除首尾空白
     }
 
+    private void serializeMap(String mapName, Map<String, ?> map, StringBuilder builder, int indent) throws ToonException {
+        final boolean notEmptyName = mapName != null && !mapName.isEmpty();
+        if (notEmptyName) {
+            // 构建对象元数据（字段声明）
+            builder.append(getIndent(indent)).append(mapName).append(": \n");
+        }
+        // 序列化字段（缩进+1）
+        final int fieldIndent = notEmptyName ? indent + 1 : indent;
+        getIndent(fieldIndent);
+        for (Map.Entry<String, ?> entry : map.entrySet()) {
+            Object value = entry.getValue();
+            if (value == null) {
+                builder.append(getIndent(fieldIndent)).append(entry.getKey()).append(": null\n");
+                continue;
+            } else if (isPrimitiveOrSupported(value.getClass())) {
+                String serializedValue = serializePrimitiveValue(value, value.getClass());
+                builder.append(getIndent(fieldIndent))
+                        .append(entry.getKey())
+                        .append(": ")
+                        .append(serializedValue)
+                        .append("\n");
+                continue;
+
+            } else if (value instanceof Collection<?>) {
+
+                final Collection<?> listSrc = (Collection<?>) value;
+                serializeCollection(entry.getKey(), listSrc, builder, fieldIndent);
+                continue;
+            } else if (value instanceof Map<?, ?>) {
+                serializeMap(entry.getKey(), (Map<String, ?>) value, builder, fieldIndent);
+                continue;
+            } else if (value instanceof Object[]) {
+                // 处理数组类型
+                final Object[] array = (Object[]) value;
+                if (array.length == 0 || array[0] != null && isPrimitiveOrSupported(array[0].getClass())) {
+                    // 基础类型数组，序列化为单行
+                    serializeCollectionValue(Arrays.asList(array));
+                } else {
+                    // 复杂类型数组，转换为List处理
+                    serializeCollection(entry.getKey(), Arrays.asList(array), builder, fieldIndent);
+                }
+                continue;
+            }
+            serializeObject(entry.getKey(), entry.getValue(), builder, fieldIndent);
+        }
+    }
+
     // 序列化集合（如List<User>）
     private void serializeCollection(String collectionName, Collection<?> collection, StringBuilder builder, int indent) throws ToonException {
         if (collection.isEmpty()) {
-            builder.append(getIndent(indent)).append(collectionName).append("(0){}: ");
+            builder.append(getIndent(indent)).append(collectionName).append("(0): {}\n");
             return;
         }
 
-        Object firstElement = collection.iterator().next();
+        final Iterator<?> iterator = collection.iterator();
+        Object firstElement = iterator.next();
         Class<?> elementType = firstElement.getClass();
+        if (isPrimitiveOrSupported(elementType)) {
+            // 基础类型集合，序列化为单行
+            List<String> valueList = new ArrayList<>();
+            for (Object element : collection) {
+                valueList.add(serializePrimitiveValue(element, elementType));
+            }
+            builder.append(getIndent(indent))
+                    .append(collectionName)
+                    .append("(").append(collection.size()).append(")")
+                    .append(": ")
+                    .append("(").append(String.join(",", valueList)).append(")")
+                    .append("\n");
+            return;
+        } else if (Map.class.isAssignableFrom(elementType)) {
+            // 集合元素为Map类型
 
+            Map <String, ?> firstMap = (Map<String, ?>) firstElement;
+            final Set<String> keys = new LinkedHashSet<>(firstMap.keySet());
+//            while(iterator.hasNext()){
+//               Object secondMap = iterator.next();
+//               if (secondMap instanceof Map<?, ?>) {
+//                   keys.addAll(((Map<String, ?>) secondMap).keySet());
+//               }
+//            }
+            String fieldsStr = String.join(",", keys);
+            builder.append(getIndent(indent))
+                    .append(collectionName)
+                    .append("(").append(collection.size()).append(")")
+                    .append("{").append(fieldsStr).append("}: \n");
+
+            // 序列化集合元素（使用紧凑格式）
+            int elementIndent = indent + 1;
+            for (Object element : collection) {
+                serializeCompressedElement(element, elementType, builder, elementIndent);
+            }
+            return;
+        }
         // 构建包含嵌套结构的完整元数据
         List<String> nestedMetas = buildNestedFieldMetas(elementType, "");
         String fieldsStr = String.join(",", nestedMetas);
@@ -115,40 +207,55 @@ public class DefaultToonSerializer implements ToonSerializer {
 
     // 新增：递归收集嵌套对象的值
     private void collectNestedValues(Object obj, Class<?> type, String parentPath, List<String> valueList) throws ToonException {
+        if (obj instanceof Map<?, ?>) {
+            collectNestedValues((Map<String, Object>) obj, parentPath, valueList);
+            return;
+        }
         List<Field> fields = FieldCache.getOrderedFields(type);
         for (Field field : fields) {
             try {
                 field.setAccessible(true);
                 Object value = field.get(obj);
                 Class<?> fieldType = field.getType();
-
-                if (value == null) {
-                    valueList.add("");
-                    continue;
-                }
-
-                // 基础类型直接添加值
-                if (isPrimitiveOrSupported(fieldType)) {
-                    valueList.add(serializePrimitiveValue(value, fieldType));
-                }
-                // 嵌套对象用括号包裹值序列
-                else if (!Collection.class.isAssignableFrom(fieldType)) {
-                    List<String> nestedValues = new ArrayList<>();
-                    collectNestedValues(value, fieldType, parentPath + field.getName() + ".", nestedValues);
-                    valueList.add("(" + String.join(",", nestedValues) + ")");
-                }
-                // 集合类型保持原有格式
-                else {
-                    // 集合处理逻辑保持不变
-                    valueList.add(serializeCollectionValue((Collection<?>) value));
-                }
+                collectNestedValues(parentPath, valueList, field.getName(), value, fieldType);
             } catch (IllegalAccessException e) {
                 throw new ToonReflectionException(type, "无法访问字段[" + field.getName() + "]", e);
             }
         }
     }
 
+    // 新增：递归收集嵌套对象的值
+    private void collectNestedValues(Map<String, Object> obj,String parentPath, List<String> valueList) throws ToonException {
+          for (final Map.Entry<String, Object> entry : obj.entrySet()) {
+            Object value = entry.getValue();
+            Class<?> fieldType =  value == null ?  null: value.getClass();
+            collectNestedValues(parentPath, valueList, entry.getKey(), value, fieldType);
+        }
+    }
 
+    private void collectNestedValues(String parentPath, List<String> valueList, String fieldName, Object value, Class<?> fieldType)
+            throws ToonException {
+        if (value == null) {
+            valueList.add("");
+            return;
+        }
+
+        // 基础类型直接添加值
+        if (isPrimitiveOrSupported(fieldType)) {
+            valueList.add(serializePrimitiveValue(value, fieldType));
+        }
+        // 嵌套对象用括号包裹值序列
+        else if (!Collection.class.isAssignableFrom(fieldType)) {
+            List<String> nestedValues = new ArrayList<>();
+            collectNestedValues(value, fieldType, parentPath + fieldName + ".", nestedValues);
+            valueList.add("(" + String.join(",", nestedValues) + ")");
+        }
+        // 集合类型保持原有格式
+        else {
+            // 集合处理逻辑保持不变
+            valueList.add(serializeCollectionValue((Collection<?>) value));
+        }
+    }
 
     private List<String> buildNestedFieldMetas(Class<?> type, String parentPath) throws ToonException {
         List<String> metas = new ArrayList<>();

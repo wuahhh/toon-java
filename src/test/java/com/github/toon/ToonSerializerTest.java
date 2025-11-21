@@ -2,9 +2,14 @@ package com.github.toon;
 
 import com.github.toon.exception.ToonException;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
+
+import org.junit.Test;
 
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
@@ -16,6 +21,44 @@ public class ToonSerializerTest {
         testSingleObjectSerialization();
         testEmptyCollectionSerialization();
     }
+    /**
+     * 测试完整Map集合的序列化
+     */
+    @Test
+    public void testMapSerialization() throws ToonException {
+        Map<String, Object> dataMap = new java.util.LinkedHashMap<>();
+        dataMap.put("id", 1001);
+        dataMap.put("name", "测试用户");
+        dataMap.put("balance", 12345.67);
+        //dataMap.put("balance2", BigDecimal.valueOf(12345.67));
+        dataMap.put("isActive", true);
+        dataMap.put("tags", java.util.Arrays.asList("vip", "premium", "测试,特殊字符"));
+        Map<String, Object> addressMap = new java.util.LinkedHashMap<>();
+        addressMap.put("street", "123 测试路");
+        addressMap.put("city", "测试市");
+        dataMap.put("address", addressMap);
+        dataMap.put("createdAt", LocalDateTime.of(2024, 6, 15, 10, 30, 0));
+        dataMap.put("usbList", null); // 测试null值处理
+        dataMap.put("emptyList", new ArrayList<>()); // 测试空集合处理
+        dataMap.put("notes", "包含特殊字符: \n 新行, 逗号, 分号; 引号\" 单引号' 反斜杠\\");
+        dataMap.put("enumField", UserStatus.ACTIVE); // 测试枚举类型
+        final List<Map<String, Object>> orderList = new ArrayList<>();
+        Map<String, Object> order1 = new java.util.LinkedHashMap<>();
+        order1.put("orderId", "ORD1001");
+        order1.put("amount", 250.75);
+        orderList.add(order1);
+        Map<String, Object> order2 = new java.util.LinkedHashMap<>();
+        order2.put("orderId", "ORD1002");
+        order2.put("amount", 125.00);
+        orderList.add(order2);
+        dataMap.put("orders", orderList); // 测试嵌套对象
+        final Object[] arr = { new TestBean("label1", "name1") };
+        dataMap.put("testArrays1", arr);
+        dataMap.put("testList1", Arrays.asList(arr));
+        final String toonStr = Toons.serialize("userData", dataMap);
+        System.out.println("Map序列化结果:\n" + toonStr);
+    }
+
     /**
      * 测试完整对象集合的序列化
      */
@@ -142,5 +185,26 @@ public class ToonSerializerTest {
         public LocalDateTime getRegisterTime() { return registerTime; }
         public UserStatus getStatus() { return status; }
         public Address getAddress() { return address; }
+    }
+
+    public static final class TestBean {
+        @com.github.toon.anno.ToonField(order = 1, comment = "name1")
+        private final String name;
+        @com.github.toon.anno.ToonField(order = 2, comment = "label1")
+        private final String label;
+
+        public TestBean(final String label, final String name) {
+            this.label = label;
+            this.name = name;
+        }
+
+
+        public String getName() {
+            return name;
+        }
+
+        public String getLabel() {
+            return label;
+        }
     }
 }
